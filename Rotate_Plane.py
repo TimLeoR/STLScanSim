@@ -36,7 +36,7 @@ class Main_Canvas(scene.SceneCanvas):
 
         # Create Plane that is used for slicing
         plane_point = [10,20,30]
-        plane_normal = np.array([0,0,1]) / np.linalg.norm([0,0,1])
+        plane_normal = np.array([0,1,0]) / np.linalg.norm([0,0,1])
         plane_normal = plane_normal / np.linalg.norm(plane_normal)
         plane = Plane(plane_point,plane_normal)
         plane_vertices, plane_faces = plane.get_vertices_and_faces(size=50,step=1)
