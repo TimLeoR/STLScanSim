@@ -1,5 +1,8 @@
 import numpy as np
-from shapely import LineString
+import shapely
+from shapely.geometry import MultiPoint,LineString
+from shapely.geometry.linestring import LineString as LineClass
+import utils
 
 class ProfileSensor():
     def __init__(self,origin,polar,azimuth,sensor_angle,measurement_angle):
@@ -28,34 +31,13 @@ class ProfileSensor():
                                 np.cos(np.radians(azimuth))])
         self.measurement_angle = measurement_angle
         self.sensor_angle = sensor_angle
-        self.set_trans_matrix()
+        self.set_trans_matrix([0,0,1])
         self.set_origin_XY()
 
 
-    def set_trans_matrix(self):
+    def set_trans_matrix(self,N):
         # Rotate points on plane
-        M = self.normal
-        N = np.array([0,0,1])   # Vector normal to the plane that the points should be rotated to
-
-        # Calculate the transformation matrix according to: https://en.wikipedia.org/wiki/Rotation_matrix#Axis_and_angle
-        if not np.array_equal(N,M):
-            costheta = np.dot(M,N)/(np.linalg.norm(M)*np.linalg.norm(N))
-            axis = np.cross(M, N) / (np.linalg.norm(np.cross(M, N)))
-            c = costheta
-            s = np.sqrt(1-c*c)
-            C = 1-c
-            
-            x = axis[0]
-            y = axis[1]
-            z = axis[2]
-            self.rmat = np.array([[x*x*C+c,x*y*C-z*s,x*z*C+y*s],
-                                  [y*x*C+z*s,y*y*C+c,y*z*C-x*s],
-                                  [z*x*C-y*s,z*y*C+x*s,z*z*C+c]])
-        
-        else:
-            self.rmat = np.array([[1,0,0],
-                                 [0,1,0],
-                                 [0,0,1]])
+        self.rmat = utils.calculate_rmat(self.normal,N)
 
 
 
@@ -79,30 +61,37 @@ class ProfileSensor():
         dx = ref[0] - self.origin_XY[0]
         dy = ref[1] - self.origin_XY[1]
         
-        if dx == 0:
-            angle_ref = np.pi / 2 if dy > 0 else -np.pi / 2
-        else:
-            angle_ref = np.arctan(dy / dx)
+        angle_ref = np.arctan2(dy,dx)
         
-        start_angle = angle_ref + np.radians(measurement_angle)
+        # Start angle adjusted by the measurement angle in radians
+        start_angle = angle_ref + np.radians(measurement_angle/2)
+
+        # Ray length (set to 20 for demonstration)
         length = 20
 
-        ray_angle = start_angle
+        # Calculate the angular spacing between rays
+        angular_spacing = np.radians(measurement_angle) / (n - 1)  # Evenly distribute rays
+
         rays = []
+        self.rays_linestrings = []
 
         for i in range(n):
-            ray_angle -= i * measurement_angle / n
+            # Calculate the angle for this ray (increment by angular_spacing)
+            ray_angle = start_angle - (i * angular_spacing)
+            
+            # Calculate the end point of the ray based on the angle
             ray_x_end = self.origin_XY[0] + length * np.cos(ray_angle)
             ray_y_end = self.origin_XY[1] + length * np.sin(ray_angle)
             
-            # Store only the endpoint of each ray
-            rays.append([ray_x_end, ray_y_end])
+            # Append both start and end points for each ray
+            rays.append([self.origin_XY[0], self.origin_XY[1]])  # Start point
+            rays.append([ray_x_end, ray_y_end])  # End point
+            # Create LineStrings using the rays array
+            self.rays_linestrings.append(LineString([[self.origin_XY[0],self.origin_XY[1]],[ray_x_end,ray_y_end]]))
 
-        # Convert to NumPy array with shape (n, 2), where each row contains the endpoint
+        # Convert to NumPy array with shape (2*n, 2) for start and end points
         self.rays = np.array(rays)
 
-        # Create a LineString using the rays array, now with shape (n, 2)
-        self.rays_linestring = LineString(self.rays) 
         
 
     def set_origin_XY(self):
@@ -129,6 +118,7 @@ class ProfileSensor():
 
             points_3D.append(np.dot(self.rmat,self.origin))
             temp = np.array(points_3D)
+            self.height = temp[0][2]
             self.slice_2D_vertices = temp[:,0:2]
 
     def set_slice_lines(self):
@@ -139,12 +129,17 @@ class ProfileSensor():
             # List to hold sections
             self.sections = []
             current_section = []
+            self.sections_linestrings = []
 
             # Loop through the vertex nodes to form sections
             for i in range(len(vertex_nodes)):
                 # Append the corresponding vertices for each pair of indices
-                current_section.append(self.slice_2D_vertices[vertex_nodes[i][0]])
-                current_section.append(self.slice_2D_vertices[vertex_nodes[i][1]])
+                x_coordinate = self.slice_2D_vertices[vertex_nodes[i][0]]
+                y_coordinate = self.slice_2D_vertices[vertex_nodes[i][1]]
+                current_section.append(x_coordinate)
+                current_section.append(y_coordinate)
+
+                self.sections_linestrings.append(LineString(np.array([x_coordinate,y_coordinate])))
 
                 # If the first vertex of the current node is the same as the last one of the section, close the section
                 if i < len(vertex_nodes)-1:
@@ -153,8 +148,58 @@ class ProfileSensor():
                         self.sections.append(np.array(current_section))
                         current_section = []
 
+
             # Add the last section if it wasn't added
             if current_section:
                 self.sections.append(np.array(current_section))
+                
+
+    #TODO: Get only the first intersection and not the second one
+    def set_intersections(self):
+        self.intersections = []
+        temp = []
+        distances = []
+        for ray in self.rays_linestrings:
+            for line in self.sections_linestrings:
+                intersection = line.intersection(ray)
+                # Only append Points
+                if not (type(intersection) is LineClass):
+                    temp.append(intersection)
+            
+            if temp:
+                # Calculate distances and pick the smaller one
+                for intersection in temp:
+                    distances.append(shapely.distance(shapely.Point(self.origin_XY),intersection))
+                min_distance_line = np.argmin(distances)
+                self.intersections.append(temp[min_distance_line])
+                temp = []
+                distances = []
 
 
+
+        # Extract x and y coordinates from intersections
+        intersection_coords = []
+        for point in self.intersections:
+            if not point.is_empty:
+                x = point.coords.xy[0][0]
+                y = point.coords.xy[1][0]
+                intersection_coords.append([x,y])
+
+
+        # Convert to NumPy array
+        if intersection_coords:
+            self.intersection_array = np.array(intersection_coords)
+        else:
+            self.intersection_array = np.empty((0, 2))
+
+    def to_3D(self, points_2D):
+        inv_rmat = np.linalg.inv(self.rmat) #utils.calculate_rmat([0,0,1],self.normal)
+        print(np.dot(self.rmat,inv_rmat))
+
+        points_3D = np.hstack((points_2D, np.full((points_2D.shape[0], 1), self.height)))
+
+        self.points_3D_rotated = []
+        
+        for point in points_3D:
+            self.points_3D_rotated.append(np.dot(inv_rmat,point))
+        

@@ -55,8 +55,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sensor = ProfileSensor(origin=np.array([self.xPosition_spinbox.value(),self.yPosition_spinbox.value(),self.zPosition_spinbox.value()]),
                                     polar=self.polar_angle_spinbox.value(),
                                     azimuth=self.azimuth_angle_spinbox.value(),
-                                    sensor_angle=20,
-                                    measurement_angle=20)
+                                    sensor_angle=self.sensor_angle_spinbox.value(),
+                                    measurement_angle=self.measurement_angle_spinbox.value())
         self.show_sensor()
         self.show_sensor_plane()
         self.update_simulation()
@@ -92,15 +92,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sensor_normal_visual = visuals.Line(pos=[[self.sensor.origin],[self.sensor.origin+self.sensor.normal]],color=(1, 0, 1, 1), width=5)
         self.canvas_wrapper.view_3D.add(self.sensor_normal_visual)
 
-    # TODO: Move the utility function and direction object to the profile sensor class
+    #TODO: Fix weird direction change when changing polar angle
     def show_sensor_direction(self):
         if hasattr(self, 'sensor_direction_visual'):
             self.sensor_direction_visual.parent = None
         
         default_ref = np.array([0, 1, 0])  # Fixed reference direction
-        ref_proj = default_ref - np.dot(default_ref, self.sensor.normal) * self.sensor.normal  # Project onto the plane
-        ref_proj = ref_proj / np.linalg.norm(ref_proj)  # Normalize
-        self.direction = utils.find_in_plane_vector(v=self.sensor.normal, alpha=self.sensor.sensor_angle, ref=ref_proj)
+        self.direction = utils.find_in_plane_vector(v=self.sensor.normal, alpha=self.sensor.sensor_angle, ref=default_ref)
         self.sensor_direction_visual = visuals.Line(pos=[[self.sensor.origin],[self.sensor.origin+self.direction]],color=(1,0.65,0,1),width=5)
 
         self.canvas_wrapper.view_3D.add(self.sensor_direction_visual)
@@ -118,23 +116,37 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.section_visuals.append(section_visual)
                 self.canvas_wrapper.view_2D.add(section_visual)
 
+    def show_intersections_2D(self):
+        if hasattr(self, 'pointcloud_2D_visual'):
+            self.pointcloud_2D_visual.parent = None
+            
+        self.pointcloud_2D_visual = visuals.Markers()
+        self.pointcloud_2D_visual.set_data(pos=self.sensor.intersection_array,edge_width=0,face_color=(1,0.65,0,1),size=10,symbol='o')
+        self.canvas_wrapper.view_2D.add(self.pointcloud_2D_visual)
+
+    def show_intersections_3D(self):
+        if hasattr(self, 'pointcloud_3D_visual'):
+            self.pointcloud_3D_visual.parent = None
+
+        if self.sensor.points_3D_rotated:
+            self.pointcloud_3D_visual = visuals.Markers()
+            self.pointcloud_3D_visual.set_data(pos=np.array(self.sensor.points_3D_rotated),edge_width=0,face_color=(1,1,1,1),size=10,symbol='o')
+            self.canvas_wrapper.view_3D.add(self.pointcloud_3D_visual)
+
     def show_rays(self):
+        if hasattr(self,'rays_visual'):
+            self.rays_visual.parent = None
         self.rays_visual = visuals.Line(pos=self.sensor.rays,color=(1, 0, 0, 1),width=1)
         self.canvas_wrapper.view_2D.add(self.rays_visual)
 
     def create_parameter_groups(self):
-        self.sensor_data_widget = QtWidgets.QGroupBox("Sensor Data")
-        self.sensor_data_layout = QtWidgets.QVBoxLayout()
-        self.sensor_data_widget.setLayout(self.sensor_data_layout)
-        self.param_splitter.addWidget(self.sensor_data_widget)
-
         self.sensor_pos_widget = QtWidgets.QGroupBox("Sensor Position")
-        self.sensor_pos_layout = QtWidgets.QVBoxLayout()
+        self.sensor_pos_layout = QtWidgets.QGridLayout()
         self.sensor_pos_widget.setLayout(self.sensor_pos_layout)
         self.param_splitter.addWidget(self.sensor_pos_widget)
 
         self.sensor_specs_widget = QtWidgets.QGroupBox("Sensor Specs")
-        self.sensor_specs_layout = QtWidgets.QVBoxLayout()
+        self.sensor_specs_layout = QtWidgets.QGridLayout()
         self.sensor_specs_widget.setLayout(self.sensor_specs_layout)
         self.param_splitter.addWidget(self.sensor_specs_widget)
 
@@ -145,70 +157,93 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def add_parameter_controls(self):
-        # Add parameter controls to sensor_data_layout
-        self.min_distance_label = QtWidgets.QLabel("Minimal measured distance:")
-        self.max_distance_label = QtWidgets.QLabel("Maximal measured distance:")
-        self.sensor_data_layout.addWidget(self.min_distance_label)
-        self.sensor_data_layout.addWidget(self.max_distance_label)
-
         # Add parameter controls to sensor_pos_layout
         self.xPosition_label = QtWidgets.QLabel("x position")
         self.xPosition_spinbox = QtWidgets.QDoubleSpinBox()
         self.xPosition_spinbox.setRange(-2000,2000)
-        self.sensor_pos_layout.addWidget(self.xPosition_label)
-        self.sensor_pos_layout.addWidget(self.xPosition_spinbox)
+        self.sensor_pos_layout.addWidget(self.xPosition_label,0,0)
+        self.sensor_pos_layout.addWidget(self.xPosition_spinbox,1,0)
         self.xPosition_spinbox.valueChanged.connect(self.update_simulation)
 
         self.yPosition_label = QtWidgets.QLabel("y position")
         self.yPosition_spinbox = QtWidgets.QDoubleSpinBox()
         self.yPosition_spinbox.setRange(-2000,2000)
-        self.sensor_pos_layout.addWidget(self.yPosition_label)
-        self.sensor_pos_layout.addWidget(self.yPosition_spinbox)
+        self.sensor_pos_layout.addWidget(self.yPosition_label,0,1)
+        self.sensor_pos_layout.addWidget(self.yPosition_spinbox,1,1)
         self.yPosition_spinbox.valueChanged.connect(self.update_simulation)
 
         self.zPosition_label = QtWidgets.QLabel("z position")
         self.zPosition_spinbox = QtWidgets.QDoubleSpinBox()
         self.zPosition_spinbox.setRange(-2000,2000)
-        self.sensor_pos_layout.addWidget(self.zPosition_label)
-        self.sensor_pos_layout.addWidget(self.zPosition_spinbox)
+        self.sensor_pos_layout.addWidget(self.zPosition_label,0,2)
+        self.sensor_pos_layout.addWidget(self.zPosition_spinbox,1,2)
         self.zPosition_spinbox.valueChanged.connect(self.update_simulation)
 
         self.polar_angle_label = QtWidgets.QLabel("Polar angle")
         self.polar_angle_spinbox = QtWidgets.QDoubleSpinBox()
         self.polar_angle_spinbox.setRange(0, 180)
-        self.sensor_pos_layout.addWidget(self.polar_angle_label)
-        self.sensor_pos_layout.addWidget(self.polar_angle_spinbox)
+        self.sensor_pos_layout.addWidget(self.polar_angle_label,2,0)
+        self.sensor_pos_layout.addWidget(self.polar_angle_spinbox,3,0)
         self.polar_angle_spinbox.valueChanged.connect(self.update_simulation)
 
         self.azimuth_angle_label = QtWidgets.QLabel("Azimuth angle")
         self.azimuth_angle_spinbox = QtWidgets.QDoubleSpinBox()
         self.azimuth_angle_spinbox.setRange(0, 360)
-        self.sensor_pos_layout.addWidget(self.azimuth_angle_label)
-        self.sensor_pos_layout.addWidget(self.azimuth_angle_spinbox)
+        self.sensor_pos_layout.addWidget(self.azimuth_angle_label,2,1)
+        self.sensor_pos_layout.addWidget(self.azimuth_angle_spinbox,3,1)
         self.azimuth_angle_spinbox.valueChanged.connect(self.update_simulation)
 
         self.sensor_angle_label = QtWidgets.QLabel("Sensor angle")
         self.sensor_angle_spinbox = QtWidgets.QDoubleSpinBox()
-        self.sensor_angle_spinbox.setRange(0, 360)
-        self.sensor_pos_layout.addWidget(self.sensor_angle_label)
-        self.sensor_pos_layout.addWidget(self.sensor_angle_spinbox)
+        self.sensor_angle_spinbox.setRange(-360, 360)
+        self.sensor_pos_layout.addWidget(self.sensor_angle_label,2,2)
+        self.sensor_pos_layout.addWidget(self.sensor_angle_spinbox,3,2)
         self.sensor_angle_spinbox.valueChanged.connect(self.update_simulation)
 
         self.measurement_angle_label = QtWidgets.QLabel("Measurement angle")
         self.measurement_angle_spinbox = QtWidgets.QDoubleSpinBox()
-        self.measurement_angle_spinbox.setRange(0, 360)
-        self.sensor_pos_layout.addWidget(self.measurement_angle_label)
-        self.sensor_pos_layout.addWidget(self.measurement_angle_spinbox)
+        self.measurement_angle_spinbox.setRange(1, 360)
+        self.sensor_pos_layout.addWidget(self.measurement_angle_label,4,0,1,3)
+        self.sensor_pos_layout.addWidget(self.measurement_angle_spinbox,5,0,1,3)
         self.measurement_angle_spinbox.valueChanged.connect(self.update_simulation)
 
         # Add parameter controls to sensor_specs_layout
+        self.x_range_start_label = QtWidgets.QLabel("x range start")
+        self.x_range_start_spinbox = QtWidgets.QSpinBox()
+        self.x_range_start_spinbox.setRange(1, 5000)
+        self.sensor_specs_layout.addWidget(self.x_range_start_label,0,0)
+        self.sensor_specs_layout.addWidget(self.x_range_start_spinbox,0,1)
+        self.x_range_start_spinbox.valueChanged.connect(self.update_simulation)
+
+        self.x_range_end_label = QtWidgets.QLabel("x range end")
+        self.x_range_end_spinbox = QtWidgets.QSpinBox()
+        self.x_range_end_spinbox.setRange(1, 5000)
+        self.sensor_specs_layout.addWidget(self.x_range_end_label,1,0)
+        self.sensor_specs_layout.addWidget(self.x_range_end_spinbox,1,1)
+        self.x_range_end_spinbox.valueChanged.connect(self.update_simulation)
+        
+        self.z_range_start_label = QtWidgets.QLabel("z range start")
+        self.z_range_start_spinbox = QtWidgets.QSpinBox()
+        self.z_range_start_spinbox.setRange(1, 5000)
+        self.sensor_specs_layout.addWidget(self.z_range_start_label,0,2)
+        self.sensor_specs_layout.addWidget(self.z_range_start_spinbox,0,3)
+        self.z_range_start_spinbox.valueChanged.connect(self.update_simulation)
+
+        self.z_range_end_label = QtWidgets.QLabel("z range end")
+        self.z_range_end_spinbox = QtWidgets.QSpinBox()
+        self.z_range_end_spinbox.setRange(1, 5000)
+        self.sensor_specs_layout.addWidget(self.z_range_end_label,1,2)
+        self.sensor_specs_layout.addWidget(self.z_range_end_spinbox,1,3)
+        self.z_range_end_spinbox.valueChanged.connect(self.update_simulation)
+
         self.resolution_label = QtWidgets.QLabel("Resolution (number of measurement points)")
         self.resolution_spinbox = QtWidgets.QSpinBox()
         self.resolution_spinbox.setRange(0, 5000)
         self.resolution_spinbox.setValue(100)
-        self.sensor_specs_layout.addWidget(self.resolution_label)
-        self.sensor_specs_layout.addWidget(self.resolution_spinbox)
+        self.sensor_specs_layout.addWidget(self.resolution_label,2,0,1,4)
+        self.sensor_specs_layout.addWidget(self.resolution_spinbox,3,0,1,4)
         self.resolution_spinbox.valueChanged.connect(self.update_simulation)
+
 
         # Add parameter controls to visibility_layout
         self.enable_points_vis_label = QtWidgets.QLabel("Show Measured Points")
@@ -259,7 +294,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mesh = trimesh.load_mesh(file_path)
 
         # Create the mesh visual
-        self.stl_visual = visuals.Mesh(vertices=self.mesh.vertices, faces=self.mesh.faces, color=(0.6, 0.6, 1, 1), shading='flat')
+        self.stl_visual = visuals.Mesh(vertices=self.mesh.vertices, faces=self.mesh.faces, color=(0.6, 0.6, 1, 0.8), shading='flat')
         self.canvas_wrapper.view_3D.add(self.stl_visual)
         self.show_sensor_plane()
         self.update_simulation()
@@ -269,7 +304,7 @@ class MainWindow(QtWidgets.QMainWindow):
                              polar=self.polar_angle_spinbox.value(),
                              azimuth=self.azimuth_angle_spinbox.value(),
                              sensor_angle=self.sensor_angle_spinbox.value(),
-                             measurement_angle=20)
+                             measurement_angle=self.measurement_angle_spinbox.value())
         self.show_sensor()
         self.show_sensor_plane()
         self.show_sensor_normal()
@@ -277,14 +312,18 @@ class MainWindow(QtWidgets.QMainWindow):
         if hasattr(self,'mesh'):
             self.sensor.set_slice(self.mesh)
             self.sensor.set_slice_lines()
-            self.show_cross_section()
-            # calculate 2d reference point
+            # calculate 2d reference point and rays
             temp = np.dot(self.sensor.rmat,self.sensor.origin+self.direction)
             ref = temp[0:2]
             self.sensor.set_rays(n=self.resolution_spinbox.value(),
-                                 measurement_angle=self.measurement_angle_spinbox.value(),
+                                 measurement_angle=self.sensor.measurement_angle,
                                  ref=ref) 
             self.show_rays() 
+            self.sensor.set_intersections()
+            self.show_cross_section()
+            self.show_intersections_2D()
+            self.sensor.to_3D(points_2D=self.sensor.intersection_array)
+            self.show_intersections_3D()
             
         
         self.canvas_wrapper.view_3D.update()
@@ -301,7 +340,7 @@ class CanvasWrapper:
         # Create a Vispy scene
         self.view_3D = self.grid.add_view(row=0, col=0)
         self.view_2D = self.grid.add_view(row=0, col=1)
-        self.view_3D.camera = 'turntable'  # Allows interactive 3D rotation
+        self.view_3D.camera = 'fly'  # Allows interactive 3D rotation
         self.view_2D.camera = 'panzoom'  # Allows panning and zooming for the 2D view
 
         # Add 3D Axis to Canvas
