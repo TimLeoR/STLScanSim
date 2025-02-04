@@ -56,7 +56,10 @@ class MainWindow(QtWidgets.QMainWindow):
                                     polar=self.polar_angle_spinbox.value(),
                                     azimuth=self.azimuth_angle_spinbox.value(),
                                     sensor_angle=self.sensor_angle_spinbox.value(),
-                                    measurement_angle=self.measurement_angle_spinbox.value())
+                                    x_range_start=self.x_range_start_spinbox.value(),
+                                    x_range_end=self.x_range_end_spinbox.value(),
+                                    z_range_start=self.z_range_start_spinbox.value(),
+                                    z_range_end=self.z_range_end_spinbox.value())
         self.show_sensor()
         self.show_sensor_plane()
         self.update_simulation()
@@ -136,27 +139,52 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_rays(self):
         if hasattr(self,'rays_visual'):
             self.rays_visual.parent = None
-        self.rays_visual = visuals.Line(pos=self.sensor.rays,color=(1, 0, 0, 1),width=1)
+        self.rays_visual = visuals.Line(pos=self.sensor.rays,color=(1, 0, 0, 1),width=1,connect='segments')
         self.canvas_wrapper.view_2D.add(self.rays_visual)
 
     def create_parameter_groups(self):
+        self.utility_widget = QtWidgets.QGroupBox("Utility Options")
+        self.utility_layout = QtWidgets.QGridLayout()
+        self.utility_widget.setLayout(self.utility_layout)
+        self.param_splitter.addWidget(self.utility_widget)
+
         self.sensor_pos_widget = QtWidgets.QGroupBox("Sensor Position")
         self.sensor_pos_layout = QtWidgets.QGridLayout()
         self.sensor_pos_widget.setLayout(self.sensor_pos_layout)
         self.param_splitter.addWidget(self.sensor_pos_widget)
 
         self.sensor_specs_widget = QtWidgets.QGroupBox("Sensor Specs")
-        self.sensor_specs_layout = QtWidgets.QGridLayout()
+        self.sensor_specs_layout = QtWidgets.QVBoxLayout()
         self.sensor_specs_widget.setLayout(self.sensor_specs_layout)
-        self.param_splitter.addWidget(self.sensor_specs_widget)
+        self.sensor_specs_range_groupbox = QtWidgets.QGroupBox("")
+        self.sensor_specs_range_layout = QtWidgets.QGridLayout()
+        self.sensor_specs_range_groupbox.setLayout(self.sensor_specs_range_layout)
+        self.sensor_specs_resolution_groupbox = QtWidgets.QGroupBox("")
+        self.sensor_specs_resolution_layout = QtWidgets.QGridLayout()
+        self.sensor_specs_resolution_groupbox.setLayout(self.sensor_specs_resolution_layout)
 
-        self.visibility_widget = QtWidgets.QGroupBox("Visibility Options")
-        self.visibility_layout = QtWidgets.QGridLayout()
-        self.visibility_widget.setLayout(self.visibility_layout)
-        self.param_splitter.addWidget(self.visibility_widget)
+        self.sensor_specs_layout.addWidget(self.sensor_specs_range_groupbox)
+        self.sensor_specs_layout.addWidget(self.sensor_specs_resolution_groupbox)
+        self.param_splitter.addWidget(self.sensor_specs_widget)
 
 
     def add_parameter_controls(self):
+        # Add parameter controls to utility_layout
+        self.enable_pos_mode_label = QtWidgets.QLabel("Enable Positioning mode")
+        self.enable_pos_mode_checkbox = QtWidgets.QCheckBox()
+        self.enable_pos_mode_checkbox.setChecked(True)
+        self.utility_layout.addWidget(self.enable_pos_mode_label,1,1)
+        self.utility_layout.addWidget(self.enable_pos_mode_checkbox,1,0)
+        self.enable_pos_mode_checkbox.stateChanged.connect(self.update_simulation)
+
+        self.enable_traces_vis_label = QtWidgets.QLabel("Show Traces")
+        self.enable_traces_vis_checkbox = QtWidgets.QCheckBox()
+        self.enable_traces_vis_checkbox.setChecked(True)
+        self.utility_layout.addWidget(self.enable_traces_vis_label,2,1)
+        self.utility_layout.addWidget(self.enable_traces_vis_checkbox,2,0)
+        self.enable_traces_vis_checkbox.stateChanged.connect(self.update_simulation)
+
+
         # Add parameter controls to sensor_pos_layout
         self.xPosition_label = QtWidgets.QLabel("x position")
         self.xPosition_spinbox = QtWidgets.QDoubleSpinBox()
@@ -200,65 +228,59 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sensor_pos_layout.addWidget(self.sensor_angle_spinbox,3,2)
         self.sensor_angle_spinbox.valueChanged.connect(self.update_simulation)
 
-        self.measurement_angle_label = QtWidgets.QLabel("Measurement angle")
-        self.measurement_angle_spinbox = QtWidgets.QDoubleSpinBox()
-        self.measurement_angle_spinbox.setRange(1, 360)
+        self.measurement_angle_label = QtWidgets.QLabel("Measurement angle:")
         self.sensor_pos_layout.addWidget(self.measurement_angle_label,4,0,1,3)
-        self.sensor_pos_layout.addWidget(self.measurement_angle_spinbox,5,0,1,3)
-        self.measurement_angle_spinbox.valueChanged.connect(self.update_simulation)
 
         # Add parameter controls to sensor_specs_layout
         self.x_range_start_label = QtWidgets.QLabel("x range start")
-        self.x_range_start_spinbox = QtWidgets.QSpinBox()
-        self.x_range_start_spinbox.setRange(1, 5000)
-        self.sensor_specs_layout.addWidget(self.x_range_start_label,0,0)
-        self.sensor_specs_layout.addWidget(self.x_range_start_spinbox,0,1)
+        self.x_range_start_spinbox = QtWidgets.QDoubleSpinBox()
+        self.x_range_start_spinbox.setRange(0, 5000)
+        self.sensor_specs_range_layout.addWidget(self.x_range_start_label,0,0)
+        self.sensor_specs_range_layout.addWidget(self.x_range_start_spinbox,0,1)
         self.x_range_start_spinbox.valueChanged.connect(self.update_simulation)
 
         self.x_range_end_label = QtWidgets.QLabel("x range end")
-        self.x_range_end_spinbox = QtWidgets.QSpinBox()
-        self.x_range_end_spinbox.setRange(1, 5000)
-        self.sensor_specs_layout.addWidget(self.x_range_end_label,1,0)
-        self.sensor_specs_layout.addWidget(self.x_range_end_spinbox,1,1)
+        self.x_range_end_spinbox = QtWidgets.QDoubleSpinBox()
+        self.x_range_end_spinbox.setRange(0, 5000)
+        self.sensor_specs_range_layout.addWidget(self.x_range_end_label,1,0)
+        self.sensor_specs_range_layout.addWidget(self.x_range_end_spinbox,1,1)
         self.x_range_end_spinbox.valueChanged.connect(self.update_simulation)
         
         self.z_range_start_label = QtWidgets.QLabel("z range start")
-        self.z_range_start_spinbox = QtWidgets.QSpinBox()
-        self.z_range_start_spinbox.setRange(1, 5000)
-        self.sensor_specs_layout.addWidget(self.z_range_start_label,0,2)
-        self.sensor_specs_layout.addWidget(self.z_range_start_spinbox,0,3)
+        self.z_range_start_spinbox = QtWidgets.QDoubleSpinBox()
+        self.z_range_start_spinbox.setRange(0, 5000)
+        self.sensor_specs_range_layout.addWidget(self.z_range_start_label,0,2)
+        self.sensor_specs_range_layout.addWidget(self.z_range_start_spinbox,0,3)
         self.z_range_start_spinbox.valueChanged.connect(self.update_simulation)
 
         self.z_range_end_label = QtWidgets.QLabel("z range end")
-        self.z_range_end_spinbox = QtWidgets.QSpinBox()
-        self.z_range_end_spinbox.setRange(1, 5000)
-        self.sensor_specs_layout.addWidget(self.z_range_end_label,1,2)
-        self.sensor_specs_layout.addWidget(self.z_range_end_spinbox,1,3)
+        self.z_range_end_spinbox = QtWidgets.QDoubleSpinBox()
+        self.z_range_end_spinbox.setRange(0, 5000)
+        self.sensor_specs_range_layout.addWidget(self.z_range_end_label,1,2)
+        self.sensor_specs_range_layout.addWidget(self.z_range_end_spinbox,1,3)
         self.z_range_end_spinbox.valueChanged.connect(self.update_simulation)
+
+        self.x_resolution_label = QtWidgets.QLabel("x resolution")
+        self.x_resolution_spinbox = QtWidgets.QDoubleSpinBox()
+        self.x_resolution_spinbox.setRange(0, 5000)
+        self.sensor_specs_resolution_layout.addWidget(self.x_resolution_label,0,0)
+        self.sensor_specs_resolution_layout.addWidget(self.x_resolution_spinbox,0,1)
+        self.x_resolution_spinbox.valueChanged.connect(self.update_simulation)
+
+        self.z_resolution_label = QtWidgets.QLabel("z resolution")
+        self.z_resolution_spinbox = QtWidgets.QDoubleSpinBox()
+        self.z_resolution_spinbox.setRange(0, 5000)
+        self.sensor_specs_resolution_layout.addWidget(self.z_resolution_label,0,2)
+        self.sensor_specs_resolution_layout.addWidget(self.z_resolution_spinbox,0,3)
+        self.z_resolution_spinbox.valueChanged.connect(self.update_simulation)
 
         self.resolution_label = QtWidgets.QLabel("Resolution (number of measurement points)")
         self.resolution_spinbox = QtWidgets.QSpinBox()
         self.resolution_spinbox.setRange(0, 5000)
         self.resolution_spinbox.setValue(100)
-        self.sensor_specs_layout.addWidget(self.resolution_label,2,0,1,4)
-        self.sensor_specs_layout.addWidget(self.resolution_spinbox,3,0,1,4)
+        self.sensor_specs_resolution_layout.addWidget(self.resolution_label,1,0,1,4)
+        self.sensor_specs_resolution_layout.addWidget(self.resolution_spinbox,2,0,1,4)
         self.resolution_spinbox.valueChanged.connect(self.update_simulation)
-
-
-        # Add parameter controls to visibility_layout
-        self.enable_points_vis_label = QtWidgets.QLabel("Show Measured Points")
-        self.enable_points_vis_checkbox = QtWidgets.QCheckBox()
-        self.enable_points_vis_checkbox.setChecked(True)
-        self.visibility_layout.addWidget(self.enable_points_vis_label,1,1)
-        self.visibility_layout.addWidget(self.enable_points_vis_checkbox,1,0)
-        self.enable_points_vis_checkbox.stateChanged.connect(self.update_simulation)
-
-        self.enable_traces_vis_label = QtWidgets.QLabel("Show Traces")
-        self.enable_traces_vis_checkbox = QtWidgets.QCheckBox()
-        self.enable_traces_vis_checkbox.setChecked(True)
-        self.visibility_layout.addWidget(self.enable_traces_vis_label,2,1)
-        self.visibility_layout.addWidget(self.enable_traces_vis_checkbox,2,0)
-        self.enable_traces_vis_checkbox.stateChanged.connect(self.update_simulation)
 
     def setup_menubar(self):
         # Create the menu bar
@@ -286,6 +308,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.load_stl_file(self.stl_path)
 
     def load_stl_file(self, file_path):
+        if hasattr(self,'stl_visual'):
+            self.stl_visual.parent = None
         # remove the plane so transparency is possible
         self.sensor_plane_visual.parent = None
         self.canvas_wrapper.view_3D.update()
@@ -304,26 +328,34 @@ class MainWindow(QtWidgets.QMainWindow):
                              polar=self.polar_angle_spinbox.value(),
                              azimuth=self.azimuth_angle_spinbox.value(),
                              sensor_angle=self.sensor_angle_spinbox.value(),
-                             measurement_angle=self.measurement_angle_spinbox.value())
+                             x_range_start=self.x_range_start_spinbox.value(),
+                             x_range_end=self.x_range_end_spinbox.value(),
+                             z_range_start=self.z_range_start_spinbox.value(),
+                             z_range_end=self.z_range_end_spinbox.value())
+        self.measurement_angle_label.setText("Measurement angle: {:.3f}°".format(self.sensor.measurement_angle))
         self.show_sensor()
         self.show_sensor_plane()
         self.show_sensor_normal()
         self.show_sensor_direction()
+        # calculate 2d reference point and rays
+        temp = np.dot(self.sensor.rmat,self.sensor.origin+self.direction)
+        ref = temp[0:2]
+        self.sensor.set_rays(n=self.resolution_spinbox.value(),
+                             x_range_start=self.sensor.x_range_start,
+                             x_range_end=self.sensor.x_range_end,
+                             z_range_start=self.sensor.z_range_start,
+                             z_range_end=self.sensor.z_range_end,
+                             ref=ref) 
+        self.show_rays() 
         if hasattr(self,'mesh'):
             self.sensor.set_slice(self.mesh)
             self.sensor.set_slice_lines()
-            # calculate 2d reference point and rays
-            temp = np.dot(self.sensor.rmat,self.sensor.origin+self.direction)
-            ref = temp[0:2]
-            self.sensor.set_rays(n=self.resolution_spinbox.value(),
-                                 measurement_angle=self.sensor.measurement_angle,
-                                 ref=ref) 
-            self.show_rays() 
-            self.sensor.set_intersections()
             self.show_cross_section()
-            self.show_intersections_2D()
-            self.sensor.to_3D(points_2D=self.sensor.intersection_array)
-            self.show_intersections_3D()
+            if not self.enable_pos_mode_checkbox.isChecked():
+                self.sensor.set_intersections()
+                self.show_intersections_2D()
+                self.sensor.to_3D(points_2D=self.sensor.intersection_array)
+                self.show_intersections_3D()
             
         
         self.canvas_wrapper.view_3D.update()

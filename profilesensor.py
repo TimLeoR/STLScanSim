@@ -5,7 +5,7 @@ from shapely.geometry.linestring import LineString as LineClass
 import utils
 
 class ProfileSensor():
-    def __init__(self,origin,polar,azimuth,sensor_angle,measurement_angle):
+    def __init__(self,origin,polar,azimuth,sensor_angle,x_range_start,x_range_end,z_range_start,z_range_end):
         """Initialze the profile sensor
 
         ### Parameters
@@ -29,7 +29,11 @@ class ProfileSensor():
         self.normal = np.array([np.cos(np.radians(polar))*np.sin(np.radians(azimuth)),
                                 np.sin(np.radians(polar))*np.sin(np.radians(azimuth)),
                                 np.cos(np.radians(azimuth))])
-        self.measurement_angle = measurement_angle
+        self.x_range_start = x_range_start
+        self.x_range_end = x_range_end
+        self.z_range_start = z_range_start
+        self.z_range_end = z_range_end
+        self.measurement_angle = np.rad2deg(2*np.arctan2(x_range_end,2*z_range_end))
         self.sensor_angle = sensor_angle
         self.set_trans_matrix([0,0,1])
         self.set_origin_XY()
@@ -41,7 +45,7 @@ class ProfileSensor():
 
 
 
-    def set_rays(self, n, measurement_angle, ref):
+    def set_rays(self, n,x_range_start,x_range_end,z_range_start,z_range_end, ref):
         """Calculate the 2dimensional rays emitted by the sensor 
 
         ### Parameters
@@ -63,34 +67,42 @@ class ProfileSensor():
         
         angle_ref = np.arctan2(dy,dx)
         
-        # Start angle adjusted by the measurement angle in radians
-        start_angle = angle_ref + np.radians(measurement_angle/2)
 
-        # Ray length (set to 20 for demonstration)
-        length = 20
+        # Start angle adjusted by the measurement angle in radians
+        start_angle = angle_ref + np.radians(self.measurement_angle/2)
 
         # Calculate the angular spacing between rays
-        angular_spacing = np.radians(measurement_angle) / (n - 1)  # Evenly distribute rays
+        angular_spacing = np.radians(self.measurement_angle) / (n - 1)  # Evenly distribute rays
 
         rays = []
         self.rays_linestrings = []
+        angular_spacing_sum = 0
 
         for i in range(n):
             # Calculate the angle for this ray (increment by angular_spacing)
             ray_angle = start_angle - (i * angular_spacing)
+
+            angular_spacing_sum = i*angular_spacing
             
+            # Calculate length so ray end and start points form a line (trapezoid measurement form)
+            start_length = z_range_start / np.cos(np.radians(self.measurement_angle)/2-angular_spacing_sum)
+            end_length = z_range_end / np.cos(np.radians(self.measurement_angle)/2-angular_spacing_sum)
+
+            # Calculate the start point of the ray based on the angle
+            ray_x_start = self.origin_XY[0] + start_length * np.cos(ray_angle)
+            ray_y_start = self.origin_XY[1] + start_length * np.sin(ray_angle)
+
             # Calculate the end point of the ray based on the angle
-            ray_x_end = self.origin_XY[0] + length * np.cos(ray_angle)
-            ray_y_end = self.origin_XY[1] + length * np.sin(ray_angle)
+            ray_x_end = self.origin_XY[0] + end_length * np.cos(ray_angle)
+            ray_y_end = self.origin_XY[1] + end_length * np.sin(ray_angle)
             
             # Append both start and end points for each ray
-            rays.append([self.origin_XY[0], self.origin_XY[1]])  # Start point
+            rays.append([ray_x_start, ray_y_start])  # Start point
             rays.append([ray_x_end, ray_y_end])  # End point
             # Create LineStrings using the rays array
-            self.rays_linestrings.append(LineString([[self.origin_XY[0],self.origin_XY[1]],[ray_x_end,ray_y_end]]))
+            self.rays_linestrings.append(LineString([[ray_x_start,ray_y_start],[ray_x_end,ray_y_end]]))
 
-        # Convert to NumPy array with shape (2*n, 2) for start and end points
-        self.rays = np.array(rays)
+        self.rays = np.reshape(rays, (-1, 2))
 
         
 
