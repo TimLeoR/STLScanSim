@@ -64,7 +64,8 @@ class MainWindow(QtWidgets.QMainWindow):
                                     z_range_start=self.z_range_start_spinbox.value(),
                                     z_range_end=self.z_range_end_spinbox.value(),
                                     z_resolution_min=self.z_resolution_min_spinbox.value(),
-                                    z_resolution_max=self.z_resolution_max_spinbox.value())
+                                    z_resolution_max=self.z_resolution_max_spinbox.value(),
+                                    z_linearity=self.z_linearity_spinbox.value())
         self.show_sensor()
         self.show_sensor_plane()
         self.update_simulation()
@@ -291,12 +292,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sensor_specs_resolution_layout.addWidget(self.z_resolution_max_spinbox,0,3)
         self.z_resolution_max_spinbox.valueChanged.connect(self.update_simulation)
 
+        self.z_linearity_label = QtWidgets.QLabel("z linearity [%]")
+        self.z_linearity_spinbox = QtWidgets.QDoubleSpinBox()
+        self.z_linearity_spinbox.setRange(0, 100)
+        self.z_linearity_spinbox.setSingleStep(0.01)
+        self.sensor_specs_resolution_layout.addWidget(self.z_linearity_label,1,0,1,2)
+        self.sensor_specs_resolution_layout.addWidget(self.z_linearity_spinbox,1,2,1,2)
+        self.z_linearity_spinbox.valueChanged.connect(self.update_simulation)
+
         self.resolution_label = QtWidgets.QLabel("Resolution (number of measurement points)")
         self.resolution_spinbox = QtWidgets.QSpinBox()
         self.resolution_spinbox.setRange(0, 5000)
         self.resolution_spinbox.setValue(100)
-        self.sensor_specs_resolution_layout.addWidget(self.resolution_label,1,0,1,4)
-        self.sensor_specs_resolution_layout.addWidget(self.resolution_spinbox,2,0,1,4)
+        self.sensor_specs_resolution_layout.addWidget(self.resolution_label,2,0,1,4)
+        self.sensor_specs_resolution_layout.addWidget(self.resolution_spinbox,3,0,1,4)
         self.resolution_spinbox.valueChanged.connect(self.update_simulation)
 
     def setup_menubar(self):
@@ -350,7 +359,8 @@ class MainWindow(QtWidgets.QMainWindow):
                              z_range_start=self.z_range_start_spinbox.value(),
                              z_range_end=self.z_range_end_spinbox.value(),
                              z_resolution_min=self.z_resolution_min_spinbox.value(),
-                             z_resolution_max=self.z_resolution_max_spinbox.value())
+                             z_resolution_max=self.z_resolution_max_spinbox.value(),
+                             z_linearity=self.z_linearity_spinbox.value())
         
         self.measurement_angle_label.setText("Measurement angle: {:.3f}°".format(self.sensor.measurement_angle))
         self.show_sensor()

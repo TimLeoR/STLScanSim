@@ -5,7 +5,7 @@ from shapely.geometry.linestring import LineString as LineClass
 import utils
 
 class ProfileSensor():
-    def __init__(self,origin,polar,azimuth,sensor_angle,x_range_start,x_range_end,z_range_start,z_range_end,z_resolution_min,z_resolution_max):
+    def __init__(self,origin,polar,azimuth,sensor_angle,x_range_start,x_range_end,z_range_start,z_range_end,z_resolution_min,z_resolution_max,z_linearity):
         """Initialze the profile sensor
 
         ### Parameters
@@ -35,6 +35,7 @@ class ProfileSensor():
         self.z_range_end = z_range_end
         self.z_resolution_min = z_resolution_min
         self.z_resolution_max = z_resolution_max
+        self.z_linearity = z_linearity
         self.measurement_angle = np.rad2deg(2*np.arctan2(x_range_end,2*z_range_end))
         self.sensor_angle = sensor_angle
         self.set_trans_matrix([0,0,1])
@@ -167,14 +168,12 @@ class ProfileSensor():
                 self.sections.append(np.array(current_section))
                 
 
-    #TODO: Get only the first intersection and not the second one
     def set_intersections(self):
         self.intersections = []
         temp = []
         distances = []
         z_range = self.z_range_end - self.z_range_start
         z_resolution_difference = self.z_resolution_max - self.z_resolution_min
-        print("\n")
         for ray in self.rays_linestrings:
             for line in self.sections_linestrings:
                 intersection = line.intersection(ray)
@@ -184,25 +183,18 @@ class ProfileSensor():
                     intersection_distance = shapely.distance(shapely.geometry.Point(ray.xy[0][0],ray.xy[0][1]),intersection)
                     z_distance = intersection_distance*z_range/ray.length
                     z_resolution = self.z_resolution_min + z_distance*z_resolution_difference/self.z_range_end
-                    # round length according to resolution
-                    new_length = np.round(ray.length/z_resolution)*z_resolution
+                    # round length according to resolution and apply linearity error
+                    random_linearity = np.random.uniform(1-self.z_linearity/100, 1 + self.z_linearity/100)
+                    new_length = np.round(ray.length/z_resolution)*z_resolution*random_linearity
                     length_difference = ray.length - new_length
                     dx = ray.xy[1][0]-ray.xy[0][0]
                     dy = ray.xy[1][1]-ray.xy[0][1]
                     norm = np.linalg.norm([dx,dy])
                     dx /= norm
                     dy /= norm
-
                     x_new = intersection.xy[0]+dx*length_difference
                     y_new = intersection.xy[1]+dy*length_difference
-
-                    print("round: ",np.round(ray.length/z_resolution))
-                    print("resolution: ",z_resolution,"\noriginal length: ",ray.length,"\t new length: ",new_length)
-                    print("dx: ",dx,"\tdy: ",dy)
-                    print("x_old: ",intersection.xy[0],"\tx_new: ", x_new,"\tdifference: ",intersection.xy[0]-x_new)
-                    print("y_old: ",intersection.xy[1],"\ty_new: ", y_new,"\tdifference: ",intersection.xy[1]-y_new)
                     intersection = shapely.geometry.Point(x_new,y_new)
-
 
                     temp.append(intersection)
             
