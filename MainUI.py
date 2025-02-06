@@ -4,6 +4,7 @@ from profilesensor import ProfileSensor
 import vispy
 from vispy.scene import SceneCanvas, visuals
 from vispy.app import use_app
+from vispy.color import Colormap
 from vispy.visuals.transforms import STTransform
 import numpy as np
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -22,6 +23,8 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
 
         self.setWindowTitle("STLScanSim")
+        self.WindowIcon = QtGui.QIcon("Images\\Cow_Scan.png")
+        self.setWindowIcon(self.WindowIcon)
         self.setGeometry(100, 100, 1000, 600)
 
         # Create a splitter to allow resizing both the canvas and side panel
@@ -59,7 +62,9 @@ class MainWindow(QtWidgets.QMainWindow):
                                     x_range_start=self.x_range_start_spinbox.value(),
                                     x_range_end=self.x_range_end_spinbox.value(),
                                     z_range_start=self.z_range_start_spinbox.value(),
-                                    z_range_end=self.z_range_end_spinbox.value())
+                                    z_range_end=self.z_range_end_spinbox.value(),
+                                    z_resolution_min=self.z_resolution_min_spinbox.value(),
+                                    z_resolution_max=self.z_resolution_max_spinbox.value())
         self.show_sensor()
         self.show_sensor_plane()
         self.update_simulation()
@@ -132,8 +137,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.pointcloud_3D_visual.parent = None
 
         if self.sensor.points_3D_rotated:
+            points = np.array(self.sensor.points_3D_rotated)
+            max_height = np.array(self.mesh.vertices[:, 2]).max()
+            heights_norm = points[:,2] / max_height
+
+            # Create a colormap and map the heights to colors
+            colormap = Colormap(['blue', 'green', 'yellow', 'red'])
+            colors = colormap.map(heights_norm)
+
             self.pointcloud_3D_visual = visuals.Markers()
-            self.pointcloud_3D_visual.set_data(pos=np.array(self.sensor.points_3D_rotated),edge_width=0,face_color=(1,1,1,1),size=10,symbol='o')
+            self.pointcloud_3D_visual.set_data(pos=points, edge_width=0, face_color=colors, size=10, symbol='o')
             self.canvas_wrapper.view_3D.add(self.pointcloud_3D_visual)
 
     def show_rays(self):
@@ -260,19 +273,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sensor_specs_range_layout.addWidget(self.z_range_end_spinbox,1,3)
         self.z_range_end_spinbox.valueChanged.connect(self.update_simulation)
 
-        self.x_resolution_label = QtWidgets.QLabel("x resolution")
-        self.x_resolution_spinbox = QtWidgets.QDoubleSpinBox()
-        self.x_resolution_spinbox.setRange(0, 5000)
-        self.sensor_specs_resolution_layout.addWidget(self.x_resolution_label,0,0)
-        self.sensor_specs_resolution_layout.addWidget(self.x_resolution_spinbox,0,1)
-        self.x_resolution_spinbox.valueChanged.connect(self.update_simulation)
+        self.z_resolution_min_label = QtWidgets.QLabel("z resolution min")
+        self.z_resolution_min_spinbox = QtWidgets.QDoubleSpinBox()
+        self.z_resolution_min_spinbox.setRange(0.001, 5)
+        self.z_resolution_min_spinbox.setSingleStep(0.001)
+        self.z_resolution_min_spinbox.setDecimals(4)
+        self.sensor_specs_resolution_layout.addWidget(self.z_resolution_min_label,0,0)
+        self.sensor_specs_resolution_layout.addWidget(self.z_resolution_min_spinbox,0,1)
+        self.z_resolution_min_spinbox.valueChanged.connect(self.update_simulation)
 
-        self.z_resolution_label = QtWidgets.QLabel("z resolution")
-        self.z_resolution_spinbox = QtWidgets.QDoubleSpinBox()
-        self.z_resolution_spinbox.setRange(0, 5000)
-        self.sensor_specs_resolution_layout.addWidget(self.z_resolution_label,0,2)
-        self.sensor_specs_resolution_layout.addWidget(self.z_resolution_spinbox,0,3)
-        self.z_resolution_spinbox.valueChanged.connect(self.update_simulation)
+        self.z_resolution_max_label = QtWidgets.QLabel("z resolution max")
+        self.z_resolution_max_spinbox = QtWidgets.QDoubleSpinBox()
+        self.z_resolution_max_spinbox.setRange(0.001, 5)
+        self.z_resolution_max_spinbox.setSingleStep(0.001)
+        self.z_resolution_max_spinbox.setDecimals(4)
+        self.sensor_specs_resolution_layout.addWidget(self.z_resolution_max_label,0,2)
+        self.sensor_specs_resolution_layout.addWidget(self.z_resolution_max_spinbox,0,3)
+        self.z_resolution_max_spinbox.valueChanged.connect(self.update_simulation)
 
         self.resolution_label = QtWidgets.QLabel("Resolution (number of measurement points)")
         self.resolution_spinbox = QtWidgets.QSpinBox()
@@ -331,7 +348,10 @@ class MainWindow(QtWidgets.QMainWindow):
                              x_range_start=self.x_range_start_spinbox.value(),
                              x_range_end=self.x_range_end_spinbox.value(),
                              z_range_start=self.z_range_start_spinbox.value(),
-                             z_range_end=self.z_range_end_spinbox.value())
+                             z_range_end=self.z_range_end_spinbox.value(),
+                             z_resolution_min=self.z_resolution_min_spinbox.value(),
+                             z_resolution_max=self.z_resolution_max_spinbox.value())
+        
         self.measurement_angle_label.setText("Measurement angle: {:.3f}°".format(self.sensor.measurement_angle))
         self.show_sensor()
         self.show_sensor_plane()
