@@ -276,7 +276,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.z_resolution_min_label = QtWidgets.QLabel("z resolution min")
         self.z_resolution_min_spinbox = QtWidgets.QDoubleSpinBox()
-        self.z_resolution_min_spinbox.setRange(0.001, 5)
+        self.z_resolution_min_spinbox.setRange(0, 5)
         self.z_resolution_min_spinbox.setSingleStep(0.001)
         self.z_resolution_min_spinbox.setDecimals(4)
         self.sensor_specs_resolution_layout.addWidget(self.z_resolution_min_label,0,0)
@@ -285,17 +285,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.z_resolution_max_label = QtWidgets.QLabel("z resolution max")
         self.z_resolution_max_spinbox = QtWidgets.QDoubleSpinBox()
-        self.z_resolution_max_spinbox.setRange(0.001, 5)
+        self.z_resolution_max_spinbox.setRange(0, 5)
         self.z_resolution_max_spinbox.setSingleStep(0.001)
         self.z_resolution_max_spinbox.setDecimals(4)
         self.sensor_specs_resolution_layout.addWidget(self.z_resolution_max_label,0,2)
         self.sensor_specs_resolution_layout.addWidget(self.z_resolution_max_spinbox,0,3)
         self.z_resolution_max_spinbox.valueChanged.connect(self.update_simulation)
 
-        self.z_linearity_label = QtWidgets.QLabel("z linearity [%]")
+        self.z_linearity_label = QtWidgets.QLabel("z linearity")
         self.z_linearity_spinbox = QtWidgets.QDoubleSpinBox()
         self.z_linearity_spinbox.setRange(0, 100)
-        self.z_linearity_spinbox.setSingleStep(0.01)
+        self.z_linearity_spinbox.setDecimals(4)
+        self.z_linearity_spinbox.setSingleStep(0.001)
         self.sensor_specs_resolution_layout.addWidget(self.z_linearity_label,1,0,1,2)
         self.sensor_specs_resolution_layout.addWidget(self.z_linearity_spinbox,1,2,1,2)
         self.z_linearity_spinbox.valueChanged.connect(self.update_simulation)
@@ -376,7 +377,6 @@ class MainWindow(QtWidgets.QMainWindow):
                              z_range_start=self.sensor.z_range_start,
                              z_range_end=self.sensor.z_range_end,
                              ref=ref) 
-        self.show_rays() 
         if hasattr(self,'mesh'):
             self.sensor.set_slice(self.mesh)
             self.sensor.set_slice_lines()
@@ -386,6 +386,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.show_intersections_2D()
                 self.sensor.to_3D(points_2D=self.sensor.intersection_array)
                 self.show_intersections_3D()
+
+        self.show_rays() 
             
         
         self.canvas_wrapper.view_3D.update()

@@ -180,15 +180,15 @@ class ProfileSensor():
                 # Only append Points
                 if not (type(intersection) is LineClass):
                     # Calculate resolution
-                    intersection_distance = shapely.distance(shapely.geometry.Point(ray.xy[0][0],ray.xy[0][1]),intersection)
+                    intersection_distance = shapely.distance(shapely.geometry.Point(ray.xy[0][0],ray.xy[1][0]),intersection)
                     z_distance = intersection_distance*z_range/ray.length
                     z_resolution = self.z_resolution_min + z_distance*z_resolution_difference/self.z_range_end
                     # round length according to resolution and apply linearity error
-                    random_linearity = np.random.uniform(1-self.z_linearity/100, 1 + self.z_linearity/100)
-                    new_length = np.round(ray.length/z_resolution)*z_resolution*random_linearity
+                    linearity_error = np.random.uniform(-self.z_linearity,self.z_linearity)
+                    new_length = np.round(ray.length/z_resolution)*z_resolution+linearity_error
                     length_difference = ray.length - new_length
-                    dx = ray.xy[1][0]-ray.xy[0][0]
-                    dy = ray.xy[1][1]-ray.xy[0][1]
+                    dx = ray.xy[0][0]-ray.xy[0][1]
+                    dy = ray.xy[1][0]-ray.xy[1][1]
                     norm = np.linalg.norm([dx,dy])
                     dx /= norm
                     dy /= norm
