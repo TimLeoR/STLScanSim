@@ -11,6 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 
 from plane import Plane
+from sensor_dialog import SensorDialog
 import utils
 
 
@@ -63,9 +64,10 @@ class MainWindow(QtWidgets.QMainWindow):
                                     x_range_end=self.x_range_end_spinbox.value(),
                                     z_range_start=self.z_range_start_spinbox.value(),
                                     z_range_end=self.z_range_end_spinbox.value(),
-                                    z_resolution_min=self.z_resolution_min_spinbox.value(),
-                                    z_resolution_max=self.z_resolution_max_spinbox.value(),
-                                    z_linearity=self.z_linearity_spinbox.value())
+                                    z_resolution_min=self.z_resolution_min_spinbox.value()/1000,
+                                    z_resolution_max=self.z_resolution_max_spinbox.value()/1000,
+                                    z_linearity=self.z_linearity_spinbox.value()/1000,
+                                    num_rays=self.resolution_spinbox.value())
         self.show_sensor()
         self.show_sensor_plane()
         self.update_simulation()
@@ -83,6 +85,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sensor_visual_2D = visuals.Markers()
         self.sensor_visual_2D.set_data(np.array([self.sensor.origin_XY]), face_color=(1, 1, 0, 1), size=10)
         self.canvas_wrapper.view_2D.add(self.sensor_visual_2D)
+    
+    def show_ray_origin(self):
+        if hasattr(self, 'ray_origin_visual_2D'):
+            self.ray_origin_visual_2D.parent = None
+
+        # Visualize the projected sensor origin in the 2D view
+        self.ray_origin_visual_2D = visuals.Markers()
+        self.ray_origin_visual_2D.set_data(np.array([self.sensor.ray_origin]), face_color=(1, 1, 1, 1), size=10)
+        self.canvas_wrapper.view_2D.add(self.ray_origin_visual_2D)
 
     def show_sensor_plane(self):
         if hasattr(self, 'sensor_plane_visual'):
@@ -153,8 +164,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_rays(self):
         if hasattr(self,'rays_visual'):
             self.rays_visual.parent = None
-        self.rays_visual = visuals.Line(pos=self.sensor.rays,color=(1, 0, 0, 1),width=1,connect='segments')
-        self.canvas_wrapper.view_2D.add(self.rays_visual)
+        if self.enable_traces_vis_checkbox.isChecked():
+            self.rays_visual = visuals.Line(pos=self.sensor.rays,color=(1, 0, 0, 1),width=1,connect='segments')
+            self.canvas_wrapper.view_2D.add(self.rays_visual)
 
     def create_parameter_groups(self):
         self.utility_widget = QtWidgets.QGroupBox("Utility Options")
@@ -246,57 +258,57 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sensor_pos_layout.addWidget(self.measurement_angle_label,4,0,1,3)
 
         # Add parameter controls to sensor_specs_layout
-        self.x_range_start_label = QtWidgets.QLabel("x range start")
+        self.x_range_start_label = QtWidgets.QLabel("x range start [mm]")
         self.x_range_start_spinbox = QtWidgets.QDoubleSpinBox()
         self.x_range_start_spinbox.setRange(0, 5000)
         self.sensor_specs_range_layout.addWidget(self.x_range_start_label,0,0)
         self.sensor_specs_range_layout.addWidget(self.x_range_start_spinbox,0,1)
         self.x_range_start_spinbox.valueChanged.connect(self.update_simulation)
 
-        self.x_range_end_label = QtWidgets.QLabel("x range end")
+        self.x_range_end_label = QtWidgets.QLabel("x range end [mm]")
         self.x_range_end_spinbox = QtWidgets.QDoubleSpinBox()
         self.x_range_end_spinbox.setRange(0, 5000)
         self.sensor_specs_range_layout.addWidget(self.x_range_end_label,1,0)
         self.sensor_specs_range_layout.addWidget(self.x_range_end_spinbox,1,1)
         self.x_range_end_spinbox.valueChanged.connect(self.update_simulation)
         
-        self.z_range_start_label = QtWidgets.QLabel("z range start")
+        self.z_range_start_label = QtWidgets.QLabel("z range start [mm]")
         self.z_range_start_spinbox = QtWidgets.QDoubleSpinBox()
         self.z_range_start_spinbox.setRange(0, 5000)
         self.sensor_specs_range_layout.addWidget(self.z_range_start_label,0,2)
         self.sensor_specs_range_layout.addWidget(self.z_range_start_spinbox,0,3)
         self.z_range_start_spinbox.valueChanged.connect(self.update_simulation)
 
-        self.z_range_end_label = QtWidgets.QLabel("z range end")
+        self.z_range_end_label = QtWidgets.QLabel("z range end [mm]")
         self.z_range_end_spinbox = QtWidgets.QDoubleSpinBox()
         self.z_range_end_spinbox.setRange(0, 5000)
         self.sensor_specs_range_layout.addWidget(self.z_range_end_label,1,2)
         self.sensor_specs_range_layout.addWidget(self.z_range_end_spinbox,1,3)
         self.z_range_end_spinbox.valueChanged.connect(self.update_simulation)
 
-        self.z_resolution_min_label = QtWidgets.QLabel("z resolution min")
+        self.z_resolution_min_label = QtWidgets.QLabel("z resolution min [µm]")
         self.z_resolution_min_spinbox = QtWidgets.QDoubleSpinBox()
-        self.z_resolution_min_spinbox.setRange(0, 5)
-        self.z_resolution_min_spinbox.setSingleStep(0.001)
-        self.z_resolution_min_spinbox.setDecimals(4)
+        self.z_resolution_min_spinbox.setRange(0, 5000)
+        self.z_resolution_min_spinbox.setSingleStep(0.1)
+        self.z_resolution_min_spinbox.setDecimals(3)
         self.sensor_specs_resolution_layout.addWidget(self.z_resolution_min_label,0,0)
         self.sensor_specs_resolution_layout.addWidget(self.z_resolution_min_spinbox,0,1)
         self.z_resolution_min_spinbox.valueChanged.connect(self.update_simulation)
 
-        self.z_resolution_max_label = QtWidgets.QLabel("z resolution max")
+        self.z_resolution_max_label = QtWidgets.QLabel("z resolution max [µm]")
         self.z_resolution_max_spinbox = QtWidgets.QDoubleSpinBox()
-        self.z_resolution_max_spinbox.setRange(0, 5)
-        self.z_resolution_max_spinbox.setSingleStep(0.001)
-        self.z_resolution_max_spinbox.setDecimals(4)
+        self.z_resolution_max_spinbox.setRange(0, 5000)
+        self.z_resolution_max_spinbox.setSingleStep(0.1)
+        self.z_resolution_max_spinbox.setDecimals(3)
         self.sensor_specs_resolution_layout.addWidget(self.z_resolution_max_label,0,2)
         self.sensor_specs_resolution_layout.addWidget(self.z_resolution_max_spinbox,0,3)
         self.z_resolution_max_spinbox.valueChanged.connect(self.update_simulation)
 
-        self.z_linearity_label = QtWidgets.QLabel("z linearity")
+        self.z_linearity_label = QtWidgets.QLabel("z linearity [µm]")
         self.z_linearity_spinbox = QtWidgets.QDoubleSpinBox()
-        self.z_linearity_spinbox.setRange(0, 100)
-        self.z_linearity_spinbox.setDecimals(4)
-        self.z_linearity_spinbox.setSingleStep(0.001)
+        self.z_linearity_spinbox.setRange(0, 5000)
+        self.z_linearity_spinbox.setDecimals(3)
+        self.z_linearity_spinbox.setSingleStep(0.1)
         self.sensor_specs_resolution_layout.addWidget(self.z_linearity_label,1,0,1,2)
         self.sensor_specs_resolution_layout.addWidget(self.z_linearity_spinbox,1,2,1,2)
         self.z_linearity_spinbox.valueChanged.connect(self.update_simulation)
@@ -315,12 +327,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Add File menu
         file_menu = menubar.addMenu('File')
+        sensor_menu = menubar.addMenu('Sensor')
 
         # Add actions to the File menu
         open_action = QtWidgets.QAction('Open', self)
         open_action.setShortcut('Ctrl+O')  # Set the shortcut (Ctrl + O)
         open_action.triggered.connect(self.open_file)  # Connect the action to a method
         file_menu.addAction(open_action)
+
+        sensor_select = QtWidgets.QAction('Select Sensor', self)
+        sensor_select.setShortcut('Ctrl+N')
+        sensor_select.triggered.connect(self.open_sensor_selection)  # Connect the action to a method
+        sensor_menu.addAction(sensor_select)
 
 
     def open_file(self):
@@ -350,6 +368,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.show_sensor_plane()
         self.update_simulation()
 
+    def open_sensor_selection(self):
+        dialog = SensorDialog("sensors.json")
+        if dialog.exec_() == QtWidgets.QDialog.Accepted:
+            self.selected_sensor = dialog.selected_sensor
+            self.load_sensor_json()
+
+    def load_sensor_json(self):
+        self.x_range_start_spinbox.setValue(self.selected_sensor['x_range_start'])
+        self.x_range_end_spinbox.setValue(self.selected_sensor['x_range_end'])
+        self.z_range_start_spinbox.setValue(self.selected_sensor['z_range_start'])
+        self.z_range_end_spinbox.setValue(self.selected_sensor['z_range_end'])
+        self.z_resolution_min_spinbox.setValue(self.selected_sensor['z_resolution_min'])
+        self.z_resolution_max_spinbox.setValue(self.selected_sensor['z_resolution_max'])
+        self.z_linearity_spinbox.setValue(self.selected_sensor['z_linearity'])
+        self.resolution_spinbox.setValue(self.selected_sensor['Resolution'])
+
     def update_simulation(self):
         self.sensor.__init__(origin=np.array([self.xPosition_spinbox.value(),self.yPosition_spinbox.value(),self.zPosition_spinbox.value()]),
                              polar=self.polar_angle_spinbox.value(),
@@ -359,11 +393,10 @@ class MainWindow(QtWidgets.QMainWindow):
                              x_range_end=self.x_range_end_spinbox.value(),
                              z_range_start=self.z_range_start_spinbox.value(),
                              z_range_end=self.z_range_end_spinbox.value(),
-                             z_resolution_min=self.z_resolution_min_spinbox.value(),
-                             z_resolution_max=self.z_resolution_max_spinbox.value(),
-                             z_linearity=self.z_linearity_spinbox.value())
-        
-        self.measurement_angle_label.setText("Measurement angle: {:.3f}°".format(self.sensor.measurement_angle))
+                             z_resolution_min=self.z_resolution_min_spinbox.value()/1000,
+                             z_resolution_max=self.z_resolution_max_spinbox.value()/1000,
+                             z_linearity=self.z_linearity_spinbox.value()/1000,
+                             num_rays=self.resolution_spinbox.value())
         self.show_sensor()
         self.show_sensor_plane()
         self.show_sensor_normal()
@@ -371,12 +404,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # calculate 2d reference point and rays
         temp = np.dot(self.sensor.rmat,self.sensor.origin+self.direction)
         ref = temp[0:2]
-        self.sensor.set_rays(n=self.resolution_spinbox.value(),
-                             x_range_start=self.sensor.x_range_start,
-                             x_range_end=self.sensor.x_range_end,
-                             z_range_start=self.sensor.z_range_start,
-                             z_range_end=self.sensor.z_range_end,
-                             ref=ref) 
+        self.sensor.set_rays(ref=ref) 
+        self.show_ray_origin()
+        self.measurement_angle_label.setText("Measurement angle: {:.3f}°".format(self.sensor.measurement_angle))
         if hasattr(self,'mesh'):
             self.sensor.set_slice(self.mesh)
             self.sensor.set_slice_lines()
@@ -386,7 +416,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.show_intersections_2D()
                 self.sensor.to_3D(points_2D=self.sensor.intersection_array)
                 self.show_intersections_3D()
-
         self.show_rays() 
             
         

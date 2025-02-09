@@ -5,7 +5,7 @@ from shapely.geometry.linestring import LineString as LineClass
 import utils
 
 class ProfileSensor():
-    def __init__(self,origin,polar,azimuth,sensor_angle,x_range_start,x_range_end,z_range_start,z_range_end,z_resolution_min,z_resolution_max,z_linearity):
+    def __init__(self,origin,polar,azimuth,sensor_angle,x_range_start,x_range_end,z_range_start,z_range_end,z_resolution_min,z_resolution_max,z_linearity,num_rays):
         """Initialze the profile sensor
 
         ### Parameters
@@ -36,7 +36,7 @@ class ProfileSensor():
         self.z_resolution_min = z_resolution_min
         self.z_resolution_max = z_resolution_max
         self.z_linearity = z_linearity
-        self.measurement_angle = np.rad2deg(2*np.arctan2(x_range_end,2*z_range_end))
+        self.num_rays = num_rays
         self.sensor_angle = sensor_angle
         self.set_trans_matrix([0,0,1])
         self.set_origin_XY()
@@ -46,9 +46,7 @@ class ProfileSensor():
         # Rotate points on plane
         self.rmat = utils.calculate_rmat(self.normal,N)
 
-
-
-    def set_rays(self, n,x_range_start,x_range_end,z_range_start,z_range_end, ref):
+    def set_rays(self, ref):
         """Calculate the 2dimensional rays emitted by the sensor 
 
         ### Parameters
@@ -67,43 +65,56 @@ class ProfileSensor():
         # Get reference
         dx = ref[0] - self.origin_XY[0]
         dy = ref[1] - self.origin_XY[1]
+        norm = np.linalg.norm([dx, dy])
+        dx /= norm
+        dy /= norm
+
+        angle_ref = np.arctan2(dy, dx)
         
-        angle_ref = np.arctan2(dy,dx)
-        
+        # Calculate imagined laser origin
+        if self.x_range_end - self.x_range_start == 0:
+            full_length = 0
+        else:
+            full_length = ((self.z_range_end - self.z_range_start) * self.x_range_end) / (self.x_range_end - self.x_range_start)
+
+        correction = full_length - self.z_range_end
+
+        print(correction)
+
+        self.ray_origin = [self.origin_XY[0] - correction * dx, self.origin_XY[1] - correction * dy]
+
+        self.measurement_angle = np.rad2deg(np.pi - 2 * np.arctan2(2*(self.z_range_end - self.z_range_start), self.x_range_end - self.x_range_start))
 
         # Start angle adjusted by the measurement angle in radians
-        start_angle = angle_ref + np.radians(self.measurement_angle/2)
+        start_angle = angle_ref + np.radians(self.measurement_angle / 2)
 
         # Calculate the angular spacing between rays
-        angular_spacing = np.radians(self.measurement_angle) / (n - 1)  # Evenly distribute rays
+        angular_spacing = np.radians(self.measurement_angle) / (self.num_rays - 1)  # Evenly distribute rays
 
         rays = []
         self.rays_linestrings = []
-        angular_spacing_sum = 0
 
-        for i in range(n):
+        for i in range(self.num_rays):
             # Calculate the angle for this ray (increment by angular_spacing)
             ray_angle = start_angle - (i * angular_spacing)
-
-            angular_spacing_sum = i*angular_spacing
             
             # Calculate length so ray end and start points form a line (trapezoid measurement form)
-            start_length = z_range_start / np.cos(np.radians(self.measurement_angle)/2-angular_spacing_sum)
-            end_length = z_range_end / np.cos(np.radians(self.measurement_angle)/2-angular_spacing_sum)
+            start_length = (self.z_range_start+correction) / np.cos(np.radians(self.measurement_angle) / 2 - (i * angular_spacing))
+            end_length = (self.z_range_end+correction) / np.cos(np.radians(self.measurement_angle) / 2 - (i * angular_spacing))
 
             # Calculate the start point of the ray based on the angle
-            ray_x_start = self.origin_XY[0] + start_length * np.cos(ray_angle)
-            ray_y_start = self.origin_XY[1] + start_length * np.sin(ray_angle)
+            ray_x_start = self.ray_origin[0] + start_length * np.cos(ray_angle)
+            ray_y_start = self.ray_origin[1] + start_length * np.sin(ray_angle)
 
             # Calculate the end point of the ray based on the angle
-            ray_x_end = self.origin_XY[0] + end_length * np.cos(ray_angle)
-            ray_y_end = self.origin_XY[1] + end_length * np.sin(ray_angle)
+            ray_x_end = self.ray_origin[0] + end_length * np.cos(ray_angle)
+            ray_y_end = self.ray_origin[1] + end_length * np.sin(ray_angle)
             
             # Append both start and end points for each ray
             rays.append([ray_x_start, ray_y_start])  # Start point
             rays.append([ray_x_end, ray_y_end])  # End point
             # Create LineStrings using the rays array
-            self.rays_linestrings.append(LineString([[ray_x_start,ray_y_start],[ray_x_end,ray_y_end]]))
+            self.rays_linestrings.append(LineString([[ray_x_start, ray_y_start], [ray_x_end, ray_y_end]]))
 
         self.rays = np.reshape(rays, (-1, 2))
 
