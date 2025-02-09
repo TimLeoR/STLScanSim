@@ -7,12 +7,15 @@ from vispy.app import use_app
 from vispy.color import Colormap
 from vispy.visuals.transforms import STTransform
 import numpy as np
+import matplotlib.pyplot as plt
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 
 from plane import Plane
 from sensor_dialog import SensorDialog
 import utils
+import pandas as pd
+import open3d as o3d
 
 
 
@@ -124,6 +127,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas_wrapper.view_3D.add(self.sensor_direction_visual)
 
 
+    def show_measurement_line(self):
+        if hasattr(self, 'measurement_line_visual'):
+            self.measurement_line_visual.parent = None
+        
+        self.measurement_line_visual = visuals.Line(pos=[[self.sensor.origin],[[self.xPosition_end_spinbox.value(),self.yPosition_end_spinbox.value(),self.zPosition_end_spinbox.value()]]],color=(1,1,1,1),width=5)
+        self.canvas_wrapper.view_3D.add(self.measurement_line_visual)
+
     def show_cross_section(self):
         if not (hasattr(self,'section_visuals')):
             self.section_visuals = []
@@ -158,7 +168,7 @@ class MainWindow(QtWidgets.QMainWindow):
             colors = colormap.map(heights_norm)
 
             self.pointcloud_3D_visual = visuals.Markers()
-            self.pointcloud_3D_visual.set_data(pos=points, edge_width=0, face_color=colors, size=10, symbol='o')
+            self.pointcloud_3D_visual.set_data(pos=points, edge_width=0, face_color=colors, size=20, symbol='o')
             self.canvas_wrapper.view_3D.add(self.pointcloud_3D_visual)
 
     def show_rays(self):
@@ -169,6 +179,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self.canvas_wrapper.view_2D.add(self.rays_visual)
 
     def create_parameter_groups(self):
+        self.measurement_widget = QtWidgets.QGroupBox("Measurement")
+        self.measurement_layout = QtWidgets.QGridLayout()
+        self.measurement_widget.setLayout(self.measurement_layout)
+        self.param_splitter.addWidget(self.measurement_widget)
+
         self.utility_widget = QtWidgets.QGroupBox("Utility Options")
         self.utility_layout = QtWidgets.QGridLayout()
         self.utility_widget.setLayout(self.utility_layout)
@@ -195,6 +210,39 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def add_parameter_controls(self):
+        # Add parameter controls to measurement_layout
+        self.xPosition_end_label = QtWidgets.QLabel("x position end")
+        self.xPosition_end_spinbox = QtWidgets.QDoubleSpinBox()
+        self.xPosition_end_spinbox.setRange(-5000,5000)
+        self.measurement_layout.addWidget(self.xPosition_end_label,0,0)
+        self.measurement_layout.addWidget(self.xPosition_end_spinbox,1,0)
+        self.xPosition_end_spinbox.valueChanged.connect(self.update_simulation)
+
+        self.yPosition_end_label = QtWidgets.QLabel("y position end")
+        self.yPosition_end_spinbox = QtWidgets.QDoubleSpinBox()
+        self.yPosition_end_spinbox.setRange(-5000,5000)
+        self.measurement_layout.addWidget(self.yPosition_end_label,0,1)
+        self.measurement_layout.addWidget(self.yPosition_end_spinbox,1,1)
+        self.yPosition_end_spinbox.valueChanged.connect(self.update_simulation)
+
+        self.zPosition_end_label = QtWidgets.QLabel("z position end")
+        self.zPosition_end_spinbox = QtWidgets.QDoubleSpinBox()
+        self.zPosition_end_spinbox.setRange(-5000,5000)
+        self.measurement_layout.addWidget(self.zPosition_end_label,0,2)
+        self.measurement_layout.addWidget(self.zPosition_end_spinbox,1,2)
+        self.zPosition_end_spinbox.valueChanged.connect(self.update_simulation)
+
+        self.num_measurements_label = QtWidgets.QLabel("num measurements")
+        self.num_measurements_spinbox = QtWidgets.QSpinBox()
+        self.num_measurements_spinbox.setRange(0,100000)
+        self.measurement_layout.addWidget(self.num_measurements_label,2,0)
+        self.measurement_layout.addWidget(self.num_measurements_spinbox,2,1,1,2)
+        self.num_measurements_spinbox.valueChanged.connect(self.update_simulation)
+
+        self.start_3D_measurement_button = QtWidgets.QPushButton("Start measurement")
+        self.measurement_layout.addWidget(self.start_3D_measurement_button,4,0,1,3)
+        self.start_3D_measurement_button.clicked.connect(self.start_3D_measurement)
+
         # Add parameter controls to utility_layout
         self.enable_pos_mode_label = QtWidgets.QLabel("Enable Positioning mode")
         self.enable_pos_mode_checkbox = QtWidgets.QCheckBox()
@@ -214,21 +262,21 @@ class MainWindow(QtWidgets.QMainWindow):
         # Add parameter controls to sensor_pos_layout
         self.xPosition_label = QtWidgets.QLabel("x position")
         self.xPosition_spinbox = QtWidgets.QDoubleSpinBox()
-        self.xPosition_spinbox.setRange(-2000,2000)
+        self.xPosition_spinbox.setRange(-5000,5000)
         self.sensor_pos_layout.addWidget(self.xPosition_label,0,0)
         self.sensor_pos_layout.addWidget(self.xPosition_spinbox,1,0)
         self.xPosition_spinbox.valueChanged.connect(self.update_simulation)
 
         self.yPosition_label = QtWidgets.QLabel("y position")
         self.yPosition_spinbox = QtWidgets.QDoubleSpinBox()
-        self.yPosition_spinbox.setRange(-2000,2000)
+        self.yPosition_spinbox.setRange(-5000,5000)
         self.sensor_pos_layout.addWidget(self.yPosition_label,0,1)
         self.sensor_pos_layout.addWidget(self.yPosition_spinbox,1,1)
         self.yPosition_spinbox.valueChanged.connect(self.update_simulation)
 
         self.zPosition_label = QtWidgets.QLabel("z position")
         self.zPosition_spinbox = QtWidgets.QDoubleSpinBox()
-        self.zPosition_spinbox.setRange(-2000,2000)
+        self.zPosition_spinbox.setRange(-5000,5000)
         self.sensor_pos_layout.addWidget(self.zPosition_label,0,2)
         self.sensor_pos_layout.addWidget(self.zPosition_spinbox,1,2)
         self.zPosition_spinbox.valueChanged.connect(self.update_simulation)
@@ -401,6 +449,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.show_sensor_plane()
         self.show_sensor_normal()
         self.show_sensor_direction()
+        self.show_measurement_line()
         # calculate 2d reference point and rays
         temp = np.dot(self.sensor.rmat,self.sensor.origin+self.direction)
         ref = temp[0:2]
@@ -421,6 +470,66 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.canvas_wrapper.view_3D.update()
         self.canvas_wrapper.view_2D.update()
+
+    def start_3D_measurement(self):
+        # Calculate sensor_origin points from starting and ending positions
+        start_point = np.array([self.xPosition_spinbox.value(), self.yPosition_spinbox.value(), self.zPosition_spinbox.value()])
+        end_point = np.array([self.xPosition_end_spinbox.value(), self.yPosition_end_spinbox.value(), self.zPosition_end_spinbox.value()])
+        num_measurements = self.num_measurements_spinbox.value()
+
+        # Generate points along the line
+        points = np.linspace(start_point, end_point, num_measurements)
+
+        # Collect all points from the measurements
+        all_points = []
+
+        for point in points:
+            self.sensor.__init__(origin=point,
+                                    polar=self.polar_angle_spinbox.value(),
+                                    azimuth=self.azimuth_angle_spinbox.value(),
+                                    sensor_angle=self.sensor_angle_spinbox.value(),
+                                    x_range_start=self.x_range_start_spinbox.value(),
+                                    x_range_end=self.x_range_end_spinbox.value(),
+                                    z_range_start=self.z_range_start_spinbox.value(),
+                                    z_range_end=self.z_range_end_spinbox.value(),
+                                    z_resolution_min=self.z_resolution_min_spinbox.value()/1000,
+                                    z_resolution_max=self.z_resolution_max_spinbox.value()/1000,
+                                    z_linearity=self.z_linearity_spinbox.value()/1000,
+                                    num_rays=self.resolution_spinbox.value())
+            temp = np.dot(self.sensor.rmat, self.sensor.origin + self.direction)
+            ref = temp[0:2]
+            self.sensor.set_rays(ref=ref)
+            self.sensor.set_slice(self.mesh)
+            self.sensor.set_slice_lines()
+            self.sensor.set_intersections()
+            self.sensor.to_3D(points_2D=self.sensor.intersection_array)
+            all_points.extend(self.sensor.points_3D_rotated)
+
+        # Convert list to numpy array
+        all_points = np.array(all_points)
+
+        if all_points.shape[0] == 0:
+            print("No points collected. Check sensor setup.")
+            return
+
+        # Extract Z values and normalize for colormap
+        z_values = all_points[:, 2]  # Get Z-coordinates
+        z_min, z_max = z_values.min(), z_values.max()
+        z_norm = (z_values - z_min) / (z_max - z_min)  # Normalize to [0,1]
+
+        # Map normalized Z-values to colors using Jet colormap
+        colormap = plt.cm.jet  # Change this to viridis, plasma, etc., if preferred
+        colors = colormap(z_norm)[:, :3]  # Extract RGB values
+
+        # Convert points to Open3D PointCloud
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(all_points)
+        pcd.colors = o3d.utility.Vector3dVector(colors)  # Assign colors
+
+        # Save PointCloud to .ply file with colors
+        ply_path = "output_colored.ply"
+        o3d.io.write_point_cloud(ply_path, pcd)
+
 
 
 

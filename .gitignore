@@ -2,6 +2,8 @@
 /STL_FILES
 /sensors.json
 /temp1.py
+/output.ply
+/output_colored.ply
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,7 +1,8 @@
 import numpy as np
 import shapely
-from shapely.geometry import MultiPoint,LineString
+from shapely.geometry import LineString
 from shapely.geometry.linestring import LineString as LineClass
+from shapely.strtree import STRtree
 import utils
 
 class ProfileSensor():
@@ -78,11 +79,7 @@ class ProfileSensor():
             full_length = ((self.z_range_end - self.z_range_start) * self.x_range_end) / (self.x_range_end - self.x_range_start)
 
         correction = full_length - self.z_range_end
-
-        print(correction)
-
         self.ray_origin = [self.origin_XY[0] - correction * dx, self.origin_XY[1] - correction * dy]
-
         self.measurement_angle = np.rad2deg(np.pi - 2 * np.arctan2(2*(self.z_range_end - self.z_range_start), self.x_range_end - self.x_range_start))
 
         # Start angle adjusted by the measurement angle in radians
@@ -181,59 +178,61 @@ class ProfileSensor():
 
     def set_intersections(self):
         self.intersections = []
-        temp = []
-        distances = []
         z_range = self.z_range_end - self.z_range_start
         z_resolution_difference = self.z_resolution_max - self.z_resolution_min
+        z_range_inv = 1 / self.z_range_end
+
+        # **Compute Global Bounding Box of rays Lines**
+        #bounding_box = utils.compute_global_bounding_box(self.rays_linestrings)
+
+        # **Use CUDA to Filter Section Lines Inside the Bounding Box**
+        #filtered_sections = utils.filter_lines_with_cuda(self.sections_linestrings, bounding_box)
+
+        # **Build STRtree Only for Filtered Section Lines**
+        #spatial_index = STRtree(filtered_sections)
+        spatial_index = STRtree(self.sections_linestrings)
+
         for ray in self.rays_linestrings:
-            for line in self.sections_linestrings:
-                intersection = line.intersection(ray)
-                # Only append Points
-                if not (type(intersection) is LineClass):
-                    # Calculate resolution
-                    intersection_distance = shapely.distance(shapely.geometry.Point(ray.xy[0][0],ray.xy[1][0]),intersection)
-                    z_distance = intersection_distance*z_range/ray.length
-                    z_resolution = self.z_resolution_min + z_distance*z_resolution_difference/self.z_range_end
-                    # round length according to resolution and apply linearity error
-                    linearity_error = np.random.uniform(-self.z_linearity,self.z_linearity)
-                    new_length = np.round(ray.length/z_resolution)*z_resolution+linearity_error
+            temp = []  
+            distances = []
+            possible_matches = spatial_index.query_nearest(ray,0.0001)
+
+            for index in possible_matches:
+                intersection = ray.intersection(self.sections_linestrings[index])
+
+                if isinstance(intersection, shapely.geometry.Point):
+                    # **Calculate Z Resolution**
+                    intersection_distance = ray.xy[0][0] - intersection.x
+                    z_distance = intersection_distance * z_range / ray.length
+                    z_resolution = self.z_resolution_min + z_distance * z_resolution_difference * z_range_inv
+
+                    # **Round Length & Apply Linearity Error**
+                    linearity_error = np.random.uniform(-self.z_linearity, self.z_linearity)
+                    new_length = round(ray.length / z_resolution) * z_resolution + linearity_error
                     length_difference = ray.length - new_length
-                    dx = ray.xy[0][0]-ray.xy[0][1]
-                    dy = ray.xy[1][0]-ray.xy[1][1]
-                    norm = np.linalg.norm([dx,dy])
+
+                    # **Adjust Intersection Point**
+                    dx = ray.xy[0][0] - ray.xy[0][1]
+                    dy = ray.xy[1][0] - ray.xy[1][1]
+                    norm = np.linalg.norm([dx, dy])
                     dx /= norm
                     dy /= norm
-                    x_new = intersection.xy[0]+dx*length_difference
-                    y_new = intersection.xy[1]+dy*length_difference
-                    intersection = shapely.geometry.Point(x_new,y_new)
+                    x_new = intersection.x + dx * length_difference
+                    y_new = intersection.y + dy * length_difference
+                    adjusted_intersection = shapely.geometry.Point(x_new, y_new)
 
-                    temp.append(intersection)
-            
+                    temp.append((adjusted_intersection, shapely.distance(shapely.Point(self.origin_XY), adjusted_intersection)))
+
             if temp:
-                # Calculate distances and pick the smaller one
-                for intersection in temp:
-                    distances.append(shapely.distance(shapely.Point(self.origin_XY),intersection))
-                min_distance_line = np.argmin(distances)
-                self.intersections.append(temp[min_distance_line])
-                temp = []
-                distances = []
+                # **Select Closest Intersection**
+                closest_intersection = min(temp, key=lambda x: x[1])[0]
+                self.intersections.append(closest_intersection)
 
+        # Extract x and y coordinates from intersections and convert to NumPy array
+        self.intersection_array = np.array(
+            [[point.coords.xy[0][0], point.coords.xy[1][0]] for point in self.intersections if not point.is_empty]
+        ) if self.intersections else np.empty((0, 2))
 
-
-        # Extract x and y coordinates from intersections
-        intersection_coords = []
-        for point in self.intersections:
-            if not point.is_empty:
-                x = point.coords.xy[0][0]
-                y = point.coords.xy[1][0]
-                intersection_coords.append([x,y])
-
-
-        # Convert to NumPy array
-        if intersection_coords:
-            self.intersection_array = np.array(intersection_coords)
-        else:
-            self.intersection_array = np.empty((0, 2))
 
     def to_3D(self, points_2D):
         inv_rmat = np.linalg.inv(self.rmat) 
