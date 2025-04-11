@@ -2,8 +2,13 @@
 /STL_FILES
 /sensors.json
 /temp1.py
+/temp2.py
 /output.ply
+/Measurements
 /output_colored.ply
+/ply_to_me3dpc.py
+/converted.me3dpc
+/injection molded part.me3dpc
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

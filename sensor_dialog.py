@@ -5,12 +5,16 @@ from PyQt5.QtWidgets import (
     QPushButton, QHBoxLayout
 )
 from PyQt5.QtCore import Qt
+from PyQt5 import QtGui
 
 class SensorDialog(QDialog):
     def __init__(self, json_file):
         super().__init__()
         self.setWindowTitle("Select a Sensor")
         self.setGeometry(100, 100, 900, 400)  # Increased width for better visibility
+
+        self.WindowIcon = QtGui.QIcon("Images\\Cow_Scan.png")
+        self.setWindowIcon(self.WindowIcon)
         
         self.json_file = json_file
         self.selected_sensor = None

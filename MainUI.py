@@ -13,6 +13,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 from plane import Plane
 from sensor_dialog import SensorDialog
+from progress_dialog import ProgressDialog
 import utils
 import pandas as pd
 import open3d as o3d
@@ -103,7 +104,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.sensor_plane_visual.parent = None
 
         self.sensor_plane = Plane(self.sensor.origin,self.sensor.normal)
-        self.sensor_plane_vertices, self.sensor_plane_faces = self.sensor_plane.get_vertices_and_faces(size=50,step=1)
+        self.sensor_plane_vertices, self.sensor_plane_faces = self.sensor_plane.get_vertices_and_faces(size=100,step=1)
         self.sensor_plane_visual = visuals.Mesh(vertices=self.sensor_plane_vertices, faces=self.sensor_plane_faces, color=(1, 0, 0, 0.5),shading='smooth')
 
         self.canvas_wrapper.view_3D.add(self.sensor_plane_visual)
@@ -168,7 +169,7 @@ class MainWindow(QtWidgets.QMainWindow):
             colors = colormap.map(heights_norm)
 
             self.pointcloud_3D_visual = visuals.Markers()
-            self.pointcloud_3D_visual.set_data(pos=points, edge_width=0, face_color=colors, size=20, symbol='o')
+            self.pointcloud_3D_visual.set_data(pos=points, edge_width=0, face_color=colors, size=10, symbol='o')
             self.canvas_wrapper.view_3D.add(self.pointcloud_3D_visual)
 
     def show_rays(self):
@@ -483,54 +484,83 @@ class MainWindow(QtWidgets.QMainWindow):
         # Collect all points from the measurements
         all_points = []
 
-        for point in points:
-            self.sensor.__init__(origin=point,
-                                    polar=self.polar_angle_spinbox.value(),
-                                    azimuth=self.azimuth_angle_spinbox.value(),
-                                    sensor_angle=self.sensor_angle_spinbox.value(),
-                                    x_range_start=self.x_range_start_spinbox.value(),
-                                    x_range_end=self.x_range_end_spinbox.value(),
-                                    z_range_start=self.z_range_start_spinbox.value(),
-                                    z_range_end=self.z_range_end_spinbox.value(),
-                                    z_resolution_min=self.z_resolution_min_spinbox.value()/1000,
-                                    z_resolution_max=self.z_resolution_max_spinbox.value()/1000,
-                                    z_linearity=self.z_linearity_spinbox.value()/1000,
-                                    num_rays=self.resolution_spinbox.value())
-            temp = np.dot(self.sensor.rmat, self.sensor.origin + self.direction)
-            ref = temp[0:2]
-            self.sensor.set_rays(ref=ref)
-            self.sensor.set_slice(self.mesh)
-            self.sensor.set_slice_lines()
-            self.sensor.set_intersections()
-            self.sensor.to_3D(points_2D=self.sensor.intersection_array)
-            all_points.extend(self.sensor.points_3D_rotated)
+        # Open a progress dialog
+        self.progress_dialog = ProgressDialog()
+        self.progress_dialog.show()
+        if not self.progress_dialog.is_canceled:
+            for i,point in enumerate(points):
+                self.sensor.__init__(origin=point,
+                                        polar=self.polar_angle_spinbox.value(),
+                                        azimuth=self.azimuth_angle_spinbox.value(),
+                                        sensor_angle=self.sensor_angle_spinbox.value(),
+                                        x_range_start=self.x_range_start_spinbox.value(),
+                                        x_range_end=self.x_range_end_spinbox.value(),
+                                        z_range_start=self.z_range_start_spinbox.value(),
+                                        z_range_end=self.z_range_end_spinbox.value(),
+                                        z_resolution_min=self.z_resolution_min_spinbox.value()/1000,
+                                        z_resolution_max=self.z_resolution_max_spinbox.value()/1000,
+                                        z_linearity=self.z_linearity_spinbox.value()/1000,
+                                        num_rays=self.resolution_spinbox.value())
+                temp = np.dot(self.sensor.rmat, self.sensor.origin + self.direction)
+                ref = temp[0:2]
+                self.sensor.set_rays(ref=ref)
+                self.sensor.set_slice(self.mesh)
+                self.sensor.set_slice_lines()
+                self.sensor.set_intersections()
+                self.sensor.to_3D(points_2D=self.sensor.intersection_array)
+                all_points.extend(self.sensor.points_3D_rotated)
+                self.progress_dialog.update_after_scan(progress=int(i*100/(num_measurements-1)))
+                QtWidgets.QApplication.processEvents()  # Force the GUI to process events
 
-        # Convert list to numpy array
-        all_points = np.array(all_points)
+            # Convert list to numpy array
+            all_points = np.array(all_points)
 
-        if all_points.shape[0] == 0:
-            print("No points collected. Check sensor setup.")
-            return
+            if all_points.shape[0] == 0:
+                print("No points collected. Check sensor setup.")
+                return
 
-        # Extract Z values and normalize for colormap
-        z_values = all_points[:, 2]  # Get Z-coordinates
-        z_min, z_max = z_values.min(), z_values.max()
-        z_norm = (z_values - z_min) / (z_max - z_min)  # Normalize to [0,1]
+            # Extract Z values and normalize for colormap
+            z_values = all_points[:, 2]  # Get Z-coordinates
+            z_min, z_max = z_values.min(), z_values.max()
 
-        # Map normalized Z-values to colors using Jet colormap
-        colormap = plt.cm.jet  # Change this to viridis, plasma, etc., if preferred
-        colors = colormap(z_norm)[:, :3]  # Extract RGB values
+            if z_min == z_max:
+                z_norm = np.zeros_like(z_values)  # All Z values are the same, set normalization to zero
+            else:
+                z_norm = (z_values - z_min) / (z_max - z_min)  # Normalize to [0,1]
 
-        # Convert points to Open3D PointCloud
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(all_points)
-        pcd.colors = o3d.utility.Vector3dVector(colors)  # Assign colors
+            # Map normalized Z-values to colors using Jet colormap
+            colormap = plt.cm.jet  # Change this to viridis, plasma, etc., if preferred
+            colors = colormap(z_norm)[:, :3]  # Extract RGB values
 
-        # Save PointCloud to .ply file with colors
-        ply_path = "output_colored.ply"
-        o3d.io.write_point_cloud(ply_path, pcd)
+            # Convert points to Open3D PointCloud
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(all_points)
+            pcd.colors = o3d.utility.Vector3dVector(colors)  # Assign colors to the points
 
+            # Get the newest measurement number for the output file
+            measurement_index = self.get_highest_measurement_index() + 1
 
+            # Save PointCloud to .ply file with colors
+            ply_path = f"Measurements/{measurement_index:03d}/output_colored.ply"
+            os.makedirs(os.path.dirname(ply_path), exist_ok=True)  # Create the directory if it doesn't exist
+            o3d.io.write_point_cloud(ply_path, pcd)
+            self.progress_dialog.cancel_measurement()
+    
+    def get_highest_measurement_index(self):
+        # Get all folders in the Measurements directory
+        folders = os.listdir("Measurements")
+        
+        # Filter out all items that are not directories and are not named like numbers
+        folders = [f for f in folders if os.path.isdir(os.path.join("Measurements", f)) and f.isdigit()]
+        
+        # Convert folder names to integers
+        indices = [int(f) for f in folders]
+        
+        # Return the lowest available measurement index
+        if indices:
+            return max(indices)
+        else:
+            return 0
 
 
 
