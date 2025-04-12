@@ -1,0 +1,8 @@
+trimesh==4.6.0
+vispy==0.14.3
+numpy==1.26.4
+scipy==1.15.1
+matplotlib==3.10.1
+PyQt5==5.15.10
+open3d
+shapely==2.0.6

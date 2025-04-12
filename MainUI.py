@@ -1,7 +1,6 @@
 import os
 import trimesh
 from profilesensor import ProfileSensor
-import vispy
 from vispy.scene import SceneCanvas, visuals
 from vispy.app import use_app
 from vispy.color import Colormap
@@ -10,12 +9,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-
 from plane import Plane
 from sensor_dialog import SensorDialog
 from progress_dialog import ProgressDialog
 import utils
-import pandas as pd
 import open3d as o3d
 
 
