@@ -4,13 +4,13 @@ STLScanSim is a powerful tool for simulating 3D scanning processes with 2D laser
 ## Requirements
 The software has been tested with Python 3.12.8.
 To install the required libraries run the following command in the Root Folder of STLScanSim:
-'''
+```
 pip install -r requirements.txt
-'''
+```
 To reach the UI execute MainUI.py
-'''
+```
 python MainUI.py
-'''
+```
 ## Usage
 1. Load an STL file into the application by clicking **File** and then **Open**.
    A file explorer will open with the initial directory set at **STL_FILES**.
